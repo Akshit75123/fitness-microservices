@@ -8,7 +8,7 @@ Fitness Microservices App is a cloud-native application designed to track and ma
 
 - **Backend:** Spring Boot, Spring Cloud Gateway, Spring Eureka (Netflix OSS), Spring Config Server  
 - **Authentication & Security:** OAuth2, Keycloak (PKCE flow), JWT  
-- **Databases:** PostgreSQL (user-service), MongoDB (activity-service)  
+- **Databases:** PostgreSQL (user-service), MongoDB (activity-service and ai-service)  
 - **Message Queue:** RabbitMQ  
 - **AI Service:** Gemini  
 - **Frontend:** React (port 5173)  
