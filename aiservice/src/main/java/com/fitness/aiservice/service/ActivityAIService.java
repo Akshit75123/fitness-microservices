@@ -23,7 +23,13 @@ public class ActivityAIService {
     public Recommendation generateRecommendation(Activity activity) {
         String prompt = createPromptForActivity(activity);
         String aiResponse = geminiService.getAnswer(prompt);
+
+
         log.info("RESPONSE FROM AI: {} ", aiResponse);
+        if (aiResponse == null || aiResponse.isBlank()) {
+            log.warn("Skipping AI recommendation due to empty response for activity {}", activity.getId());
+            return null; // or fallback recommendation
+        }
         return processAiResponse(activity, aiResponse);
     }
 
