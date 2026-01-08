@@ -6,6 +6,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -17,62 +18,79 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @RequiredArgsConstructor
 public class KeycloakUserSyncFilter implements WebFilter {
+
     private final UserService userService;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        String token = exchange.getRequest().getHeaders().getFirst("Authorization");
-        String userId = exchange.getRequest().getHeaders().getFirst("X-User-ID");
-        RegisterRequest registerRequest = getUserDetails(token);
 
-        if (userId == null) {
-            userId = registerRequest.getKeycloakId();
+        String authHeader = exchange.getRequest()
+                .getHeaders()
+                .getFirst("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return unauthorized(exchange);
         }
 
-        if (userId != null && token != null){
-            String finalUserId = userId;
-            return userService.validateUser(userId)
-                    .flatMap(exist -> {
-                        if (!exist) {
-                            // Register User
+        RegisterRequest registerRequest = extractUserFromToken(authHeader);
 
-                            if (registerRequest != null) {
-                                return userService.registerUser(registerRequest)
-                                        .then(Mono.empty());
-                            } else {
-                                return Mono.empty();
-                            }
-                        } else {
-                            log.info("User already exist, Skipping sync.");
-                            return Mono.empty();
-                        }
-                    })
-                    .then(Mono.defer(() -> {
-                        ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                                .header("X-User-ID", finalUserId)
-                                .build();
-                        return chain.filter(exchange.mutate().request(mutatedRequest).build());
-                    }));
+        if (registerRequest == null || registerRequest.getKeycloakId() == null) {
+            return unauthorized(exchange);
         }
-        return chain.filter(exchange);
+
+        String keycloakId = registerRequest.getKeycloakId();
+
+        // 3️⃣ Validate user by Keycloak ID only
+        return userService.validateUser(keycloakId)
+                .flatMap(exists -> {
+
+                    // 4️⃣ Register user if not present
+                    if (!exists) {
+                        log.info("Registering new user with Keycloak ID: {}", keycloakId);
+                        return userService.registerUser(registerRequest);
+                    }
+
+                    return Mono.empty();
+                })
+                .then(Mono.defer(() -> {
+
+                    // 5️⃣ Propagate trusted user ID downstream
+                    ServerHttpRequest mutatedRequest = exchange.getRequest()
+                            .mutate()
+                            .header("X-User-ID", keycloakId)
+                            .build();
+
+                    return chain.filter(
+                            exchange.mutate()
+                                    .request(mutatedRequest)
+                                    .build()
+                    );
+                }));
     }
 
-    private RegisterRequest getUserDetails(String token) {
+    private RegisterRequest extractUserFromToken(String authHeader) {
         try {
-            String tokenWithoutBearer = token.replace("Bearer ", "").trim();
-            SignedJWT signedJWT = SignedJWT.parse(tokenWithoutBearer);
+            String token = authHeader.replace("Bearer ", "").trim();
+
+            SignedJWT signedJWT = SignedJWT.parse(token);
             JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
 
-            RegisterRequest registerRequest = new RegisterRequest();
-            registerRequest.setEmail(claims.getStringClaim("email"));
-            registerRequest.setKeycloakId(claims.getStringClaim("sub"));
-            registerRequest.setPassword("dummy@123123");
-            registerRequest.setFirstName(claims.getStringClaim("given_name"));
-            registerRequest.setLastName(claims.getStringClaim("family_name"));
-            return registerRequest;
+            RegisterRequest request = new RegisterRequest();
+            request.setKeycloakId(claims.getStringClaim("sub"));
+            request.setEmail(claims.getStringClaim("email"));
+            request.setFirstName(claims.getStringClaim("given_name"));
+            request.setLastName(claims.getStringClaim("family_name"));
+            request.setPassword(null);
+
+            return request;
+
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to parse Keycloak token", e);
             return null;
         }
+    }
+
+    private Mono<Void> unauthorized(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        return exchange.getResponse().setComplete();
     }
 }
