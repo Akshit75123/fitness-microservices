@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+
 @Service
 @Slf4j
 public class UserService {
@@ -30,14 +32,16 @@ public class UserService {
             userResponse.setUpdatedAt(existingUser.getUpdatedAt());
             return userResponse;
         }
-
+        log.info("Hello from User-service");
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(request.getPassword());
         user.setKeycloakId(request.getKeycloakId());
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
-
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(null);
+        log.info(user.toString());
         User savedUser = repository.save(user);
         UserResponse userResponse = new UserResponse();
         userResponse.setKeycloakId(savedUser.getKeycloakId());
