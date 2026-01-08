@@ -1,6 +1,7 @@
 package com.fitness.userservice.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -20,6 +21,7 @@ public class User {
 
     private String keycloakId;
 
+    @NotBlank
     private String password;
     private String firstName;
     private String lastName;
