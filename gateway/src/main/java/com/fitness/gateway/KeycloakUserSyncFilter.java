@@ -40,11 +40,11 @@ public class KeycloakUserSyncFilter implements WebFilter {
 
         String keycloakId = registerRequest.getKeycloakId();
 
-        // 3️⃣ Validate user by Keycloak ID only
+        // Validate user by Keycloak ID only
         return userService.validateUser(keycloakId)
                 .flatMap(exists -> {
 
-                    // 4️⃣ Register user if not present
+                    //  Register user if not present
                     if (!exists) {
                         log.info("Registering new user with Keycloak ID: {}", keycloakId);
                         return userService.registerUser(registerRequest);
@@ -54,7 +54,7 @@ public class KeycloakUserSyncFilter implements WebFilter {
                 })
                 .then(Mono.defer(() -> {
 
-                    // 5️⃣ Propagate trusted user ID downstream
+                    // Propagate trusted user ID downstream
                     ServerHttpRequest mutatedRequest = exchange.getRequest()
                             .mutate()
                             .header("X-User-ID", keycloakId)
